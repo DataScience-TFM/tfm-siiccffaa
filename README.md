@@ -75,26 +75,7 @@ Para detener la aplicación se debe volver a PowerShell y pulsar `Ctrl+C`.
 
 ## Estructura actual
 
-```text
-Proyecto_Python_Analisis_Exploratorio/
-├── .env
-├── .gitignore
-├── README.md
-├── requirements.txt
-├── run_web.ps1
-├── web_app.py
-├── credentials/                 # Se crea al recibir la credencial
-├── src/
-│   ├── __init__.py
-│   ├── config.py
-│   ├── bigquery_runner.py
-│   └── queries.py
-├── templates/
-│   └── index.html
-└── static/
-    ├── styles.css
-    └── live.css
-```
+![alt text](image.png)
 
 ## Función de cada archivo
 
