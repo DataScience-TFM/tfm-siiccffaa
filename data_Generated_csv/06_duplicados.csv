@@ -1,0 +1,4 @@
+﻿check_name,total_rows,distinct_keys,duplicated_keys
+dataset_maestro_modelado.grain,20147,20088,59
+fact_reportes_limpios.report_code_non_null,175292,170702,4590
+fact_reportes_limpios.report_id,175292,175292,0

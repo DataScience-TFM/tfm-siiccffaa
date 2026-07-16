@@ -1,0 +1,7 @@
+﻿check_name,affected_rows
+fecha_fuera_rango_original,25
+dataset_lag1_nulo,1128
+fact_sin_provincia,87006
+dataset_target_nulo,2019
+fact_coordenadas_invalidas_o_nulas,175280
+fact_fecha_nula,0

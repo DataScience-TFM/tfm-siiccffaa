@@ -1,0 +1,7 @@
+﻿area,decision,evidencia
+modelado,target creado con comparación contra media móvil de cuatro semanas previas,18128
+texto,"title y description normalizados con TRIM, REGEXP_REPLACE y redacción de emails/teléfonos",175292
+coordenadas,latitud/longitud válidas solo si caen dentro de rango aproximado de República Dominicana,12
+geografía,provincia tomada de reports o puente reports__provincias; se conserva nulo si no existe evidencia territorial,87006
+duplicados,report_id usado como clave de reporte limpio,0
+fechas,created_on convertido/validado como DATE; rango 2021-01-01 a CURRENT_DATE,25

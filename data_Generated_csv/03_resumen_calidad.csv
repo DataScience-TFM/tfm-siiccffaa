@@ -1,0 +1,10 @@
+﻿metric,value
+agg_reportes_semanal_total,20147
+dataset_maestro_con_target,18128
+dataset_maestro_modelado_total,20147
+fact_reportes_con_coordenadas_validas,12
+fact_reportes_limpios_total,175292
+fact_reportes_sin_nombre_tipo_reporte,961
+fact_reportes_sin_provincia,87006
+reports_fecha_fuera_rango,25
+reports_original_total,175317

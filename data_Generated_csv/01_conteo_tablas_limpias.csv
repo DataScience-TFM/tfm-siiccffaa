@@ -1,0 +1,12 @@
+﻿table_name,row_count
+fact_reportes_limpios,175292
+agg_reportes_semanal,20147
+dataset_maestro_modelado,20147
+dim_municipio,158
+dim_report_type,101
+dim_company,54
+dim_provincia,33
+dim_branch,24
+dim_region,11
+dim_report_group,10
+dim_company_department,6
