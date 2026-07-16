@@ -29,6 +29,7 @@ CHARTS = [
     {"category": "calidad", "title": "Valores faltantes en Dataset Maestro", "query": "05_faltantes_dataset_maestro", "type": "bar", "x": "column_name", "y": "missing_pct"},
     {"category": "modelado", "title": "Distribución de la variable objetivo", "query": "14_distribucion_target", "type": "pie", "x": "target_class", "y": "filas"},
     {"category": "modelado", "title": "Correlaciones numéricas", "query": "16_correlaciones_numericas", "type": "bar", "x": "variable", "y": "corr_with_reportes_semana"},
+    {"category": "modelado", "title": "Valores atípicos mediante IQR", "query": "15_outliers_iqr_reportes_semana", "type": "iqr"},
     {"category": "calidad", "title": "Controles de consistencia", "query": "07_consistencia", "type": "bar", "x": "check_name", "y": "affected_rows"},
     {"category": "territorio", "title": "Provincia frente a categoría", "query": "17_cruce_provincia_categoria", "type": "heatmap"},
 ]

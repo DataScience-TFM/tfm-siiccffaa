@@ -4,7 +4,21 @@
 
 He desarrollado esta aplicación para consultar en vivo el dataset analítico `tfm-sbs.siiccffaa_clean` de BigQuery y presentar los resultados del análisis mediante gráficos Plotly y tablas interactivas.
 
-Esta carpeta contiene solamente los componentes necesarios para ejecutar el dashboard. La evidencia de preparación, limpieza y análisis exploratorio se entrega en la carpeta independiente `Evidencia_EDA`, situada al mismo nivel que este proyecto.
+Esta carpeta contiene solamente los componentes necesarios para ejecutar el dashboard. La evidencia de preparación, limpieza y análisis exploratorio se entrega en la carpeta independiente `Evidencia_Migration_and_Data_Cleaning`, situada al mismo nivel que este proyecto.
+
+## Objetivo del análisis
+
+El análisis explora la calidad, distribución temporal, concentración territorial y comportamiento operacional de los reportes del SIICCFFAA. También prepara y revisa un Dataset Maestro de granularidad semanal por provincia y tipo de reporte para anticipar incrementos de actividad y apoyar la planificación operativa del C5i.
+
+## Variable objetivo
+
+La variable objetivo es `incremento_actividad_siguiente_periodo`. Convierte la necesidad de anticipar aumentos de reportes en un problema de clasificación binaria:
+
+- `1` (`incremento`): los reportes de la semana siguiente son mayores que la media de las cuatro semanas anteriores.
+- `0` (`no_incremento`): los reportes de la semana siguiente no superan esa media histórica.
+- `NULL` (`sin_target`): no existe una semana siguiente o no hay historial suficiente para calcular la referencia.
+
+Se eligió porque permite anticipar si la actividad de una combinación de provincia y tipo de reporte aumentará respecto a su comportamiento reciente. Esta señal puede ayudar a priorizar seguimiento y recursos. Las filas sin target se conservan para auditoría, pero no deben utilizarse como observaciones etiquetadas durante el entrenamiento supervisado.
 
 ## Fuente de los datos
 
@@ -134,6 +148,37 @@ Define la estructura de la página, los filtros, los contenedores Plotly y la ta
 
 Definen el diseño visual general y los ajustes específicos de la aplicación conectada en vivo.
 
+## Contenido del análisis exploratorio
+
+El dashboard cubre los siguientes apartados:
+
+1. Objetivo del análisis y contexto operativo.
+2. Carga en vivo del dataset limpio desde BigQuery.
+3. Validación de calidad: estructura, faltantes, duplicados y consistencia.
+4. Análisis univariante de tiempo, territorio, tipos, instituciones, estados y target.
+5. Análisis bivariante y multivariante mediante cruces territoriales y correlaciones.
+6. Detección de valores atípicos mediante el rango intercuartílico (IQR).
+7. Visualizaciones interactivas con Plotly.
+8. Hallazgos principales calculados automáticamente a partir de los resultados actuales.
+9. Limitaciones metodológicas y de calidad de los datos.
+
+### Valores atípicos mediante IQR
+
+La consulta `15_outliers_iqr_reportes_semana` calcula Q1, Q3 y el rango intercuartílico (`IQR = Q3 - Q1`). Se consideran posibles valores atípicos aquellos situados fuera de `Q1 - 1,5 × IQR` y `Q3 + 1,5 × IQR`. El dashboard representa cuántas filas permanecen dentro de esos límites y cuántas quedan fuera. Un valor atípico no se considera automáticamente un error: puede reflejar un evento operativo real que requiere revisión.
+
+### Hallazgos principales
+
+La sección de hallazgos se actualiza con los datos obtenidos de BigQuery y resume la provincia y el tipo de reporte con mayor frecuencia, la proporción de la clase incremento, la cantidad y porcentaje de atípicos y la correlación lineal de mayor magnitud con `reportes_semana`. Son resultados descriptivos y no demuestran causalidad.
+
+### Limitaciones
+
+- La calidad de las conclusiones depende de la integridad y exactitud de los datos originales.
+- Los registros sin provincia, las coordenadas no válidas y los valores ausentes pueden reducir la representatividad de algunos cruces.
+- El IQR identifica observaciones inusuales, pero no determina por sí mismo si son errores.
+- Las correlaciones describen asociaciones y no relaciones causales.
+- Las primeras semanas pueden carecer de retardos o medias móviles, y el último periodo puede no tener target conocido.
+- Los resultados corresponden a la versión de BigQuery disponible al ejecutar las consultas y pueden cambiar tras nuevas cargas o correcciones.
+
 ## Funcionamiento interno
 
 ```text
@@ -160,7 +205,7 @@ Los resultados se conservan durante 15 minutos para reducir latencia y consultas
 
 ## Evidencia entregada por separado
 
-La carpeta hermana `Evidencia_EDA` contiene:
+La carpeta hermana `Evidencia_Migration_and_Data_Cleaning` contiene:
 
 - Las sentencias reales de preparación y limpieza.
 - La creación de dimensiones y de `fact_reportes_limpios`.
