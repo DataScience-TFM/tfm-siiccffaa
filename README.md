@@ -1,274 +1,206 @@
-# Evidencia de la migración, limpieza y análisis exploratorio de datos
+# Evidencia de migración, limpieza y análisis exploratorio de datos
 
-## Acceso rápido a los documentos
+Este repositorio conserva la trazabilidad técnica de un flujo de datos desde
+PostgreSQL hasta BigQuery: migración, limpieza, construcción de un Dataset
+Maestro, análisis exploratorio (EDA) y controles de calidad. Incluye los
+scripts utilizados, 20 resultados tabulares en CSV y tres informes de apoyo.
+
+> **Alcance:** esta carpeta es una instantánea de evidencia y auditoría. No es
+> un paquete autónomo listo para ejecutar de principio a fin, porque no incluye
+> los datos fuente, credenciales ni todos los recursos del pipeline original.
+
+## Documentos principales
 
 - [Informe ejecutivo del EDA](informes.md/INFORME_EJECUTIVO_EDA.md)
 - [Metodología práctica del EDA](informes.md/METODOLOGIA_PRACTICA_EDA.md)
-- [Documentación completa de la limpieza y del EDA](informes.md/PLANTILLA_DOCUMENTACION_EDA_COMPLETA.md)
+- [Documentación completa de limpieza y EDA](informes.md/PLANTILLA_DOCUMENTACION_EDA_COMPLETA.md)
 
-## Objetivo de esta evidencia
-
-En esta carpeta reuní la evidencia técnica del proceso que seguí para trabajar
-con los datos originales. Mi trabajo comenzó con la migración de la información
-desde PostgreSQL hacia BigQuery. Después preparé y limpié los registros,
-construí un esquema analítico limpio y generé el Dataset Maestro. Finalmente,
-apliqué un análisis exploratorio de datos (EDA) y diferentes controles para
-validar la calidad del resultado.
-
-Conservo los scripts, los CSV y los informes Markdown para demostrar qué hice
-en cada etapa. Los CSV y los informes muestran los resultados de mis
-comprobaciones; la limpieza y transformación fueron realizadas mediante las
-sentencias SQL ejecutadas en BigQuery.
-
-## Resumen del proceso que seguí
+## Flujo documentado
 
 ```text
-1- Datos originales en PostgreSQL
-              
-2- Exportación de los datos a CSV
-              
-3- Primer intento de carga manual mediante un bucket
-              
-4- El intento manual no permitió completar correctamente la migración
-              
-5- Automatización con los scripts de Migrator_SqlScript
-              
-6- Carga y validación en BigQuery
-              
-7- Limpieza y transformación de los datos migrados
-              
-8- Creación del esquema limpio y del Dataset Maestro
-              
-9- EDA, validaciones de calidad, CSV e informes
+PostgreSQL
+    ↓ extracción
+CSV
+    ↓ carga mediante Cloud Storage
+BigQuery: tfm-sbs.siiccffaa
+    ↓ limpieza y transformación SQL
+BigQuery: tfm-sbs.siiccffaa_clean
+    ↓ agregación semanal e ingeniería de variables
+Dataset Maestro
+    ↓ 20 consultas de EDA y validación
+CSV e informes Markdown
 ```
 
-## Organización de la evidencia
+La limpieza real se ejecuta en BigQuery. Los CSV de este repositorio son
+resultados de comprobación: no sustituyen ni realizan la transformación.
 
-![alt text](image.png)
+## Estructura del repositorio
 
-## 1. Cómo migré los datos desde PostgreSQL
+```text
+.
+├── Migrator_PowerShell_Scripts/   # Orquestación PostgreSQL → GCS → BigQuery
+├── SqlScript_Cleaning_Data/       # Limpieza, Dataset Maestro y consultas EDA
+├── Python_Scripts/                # Ejecución del EDA y generación de salidas
+├── data_Generated_csv/            # 20 resultados tabulares del EDA
+├── informes.md/                   # Informes metodológicos y ejecutivos
+├── image.png                      # Captura ilustrativa de la organización
+└── README.md
+```
 
-Los datos originales se encontraban en PostgreSQL. Primero los exporté a
-archivos CSV e intenté cargarlos creando un bucket de Cloud Storage. Con ese
-procedimiento manual no pude completar correctamente la migración, por lo que
-decidí automatizar el proceso con los archivos que conservo en
-`Migrator_SqlScript`.
+## Contenido técnico
 
-Aunque el nombre de la carpeta incluye `SqlScript`, estos archivos son scripts
-de PowerShell que utilicé para coordinar PostgreSQL, Cloud Storage y BigQuery.
+### 1. Migración
 
-### `00_check_local_requirements.ps1`
+`Migrator_PowerShell_Scripts/` contiene cuatro etapas y un orquestador:
 
-Utilicé este script para comprobar que las herramientas `gcloud` y `bq`
-estuvieran disponibles y que existieran los CSV y los esquemas requeridos antes
-de comenzar la carga.
+- `00_check_local_requirements.ps1`: comprueba `gcloud`, `bq`, CSV y esquemas.
+- `03_extract_from_postgresql_local.ps1`: invoca el pipeline PostgreSQL
+  original, copia sus salidas y transforma la matriz de cobertura a formato
+  largo.
+- `01_upload_and_load_bigquery.ps1`: crea o reutiliza bucket y dataset, sube
+  CSV, reemplaza tablas y crea vistas.
+- `02_validate_bigquery.ps1`: ejecuta las consultas de validación posteriores
+  a la carga.
+- `00_migracion_completa_postgresql_a_bigquery.ps1`: coordina todo el flujo y
+  permite activar explícitamente la autenticación y la extracción.
 
-### `03_extract_from_postgresql_local.ps1`
+Las cargas usan `bq load --replace`; por tanto, reemplazan las tablas de destino
+con el mismo nombre. Ningún script guarda la contraseña de PostgreSQL.
 
-Con este script ejecuté el pipeline de extracción desde PostgreSQL, preparé los
-CSV para la migración y convertí la matriz de cobertura a un formato tabular
-largo cuando fue necesario. No guardé la contraseña de PostgreSQL en el script;
-la introduje de forma interactiva durante la ejecución.
+### 2. Limpieza y Dataset Maestro
 
-### `01_upload_and_load_bigquery.ps1`
+El archivo
+[`01_creacion_limpieza_dataset_maestro.sql`](SqlScript_Cleaning_Data/01_creacion_limpieza_dataset_maestro.sql)
+crea el esquema `tfm-sbs.siiccffaa_clean` y:
 
-Utilicé este script para seleccionar el proyecto de Google Cloud, activar las
-API necesarias, crear o reutilizar el bucket, crear o reutilizar el dataset de
-BigQuery, subir los CSV a Cloud Storage y cargar las tablas con sus esquemas.
+1. Deduplica dimensiones con `ROW_NUMBER` y marcas temporales.
+2. Normaliza textos, estados y plataformas.
+3. Excluye identificadores nulos, eliminados lógicos y fechas fuera del rango
+   operativo.
+4. Enmascara patrones de correo y teléfono en texto libre.
+5. Resuelve provincia desde el reporte o desde `reports__provincias`.
+6. Separa coordenadas originales y coordenadas válidas para el rango geográfico
+   aproximado de República Dominicana.
+7. Construye `fact_reportes_limpios` y `agg_reportes_semanal`.
+8. Calcula rezagos de 1, 2 y 4 semanas, media y desviación de las cuatro semanas
+   anteriores, y variaciones porcentuales.
+9. Construye `dataset_maestro_modelado` con grano
+   `semana + provincia + tipo de reporte`.
+10. Define `incremento_actividad_siguiente_periodo`: vale 1 cuando los reportes
+    de la semana siguiente superan la media de las cuatro semanas previas; queda
+    nulo si falta futuro o historial suficiente.
+11. Genera `data_quality_summary`.
 
-### `02_validate_bigquery.ps1`
+[`corregir_duplicados_dataset_maestro.sql`](SqlScript_Cleaning_Data/corregir_duplicados_dataset_maestro.sql)
+es una corrección posterior para semanas que cruzan el cambio de año. Crea
+copias de respaldo, reconstruye la agregación usando año ISO y verifica que el
+grano quede sin duplicados.
 
-Después de la carga ejecuté este script para revisar los conteos, la cobertura
-y la coherencia de la información migrada antes de comenzar la limpieza.
+### 3. EDA y validación
 
-### `00_migracion_completa_postgresql_a_bigquery.ps1`
+[`02_consultas_eda_y_validacion.sql`](SqlScript_Cleaning_Data/02_consultas_eda_y_validacion.sql)
+y [`eda_queries.sql`](SqlScript_Cleaning_Data/eda_queries.sql) reúnen 20
+consultas de solo lectura sobre:
 
-Este fue el punto de entrada del flujo automatizado. Lo utilicé para ejecutar
-en orden la verificación de requisitos, la extracción opcional desde
-PostgreSQL, la autenticación, la creación del bucket y del dataset, la subida de
-los CSV, la carga de tablas, la creación de vistas y la validación final.
+- estructura y conteos de tablas;
+- resumen de calidad, faltantes y duplicados;
+- consistencia temporal, territorial y de coordenadas;
+- distribuciones, tendencia semanal y categorías principales;
+- variable objetivo, outliers IQR y correlaciones;
+- auditoría de decisiones de limpieza y grupos de reporte.
 
-De esta forma sustituí el intento manual que no había funcionado por un proceso
-controlado, repetible y verificable.
+### 4. Automatización Python
 
-## 2. Cómo limpié y transformé los datos en BigQuery
+`Python_Scripts/` conserva la implementación usada para consultar BigQuery por
+su API REST, convertir resultados a `pandas.DataFrame`, exportar CSV y generar
+figuras, informes Markdown y un dashboard HTML.
 
-### `script_sql_for_data_cleaning/01_creacion_limpieza_dataset_maestro.sql`
+Dependencias inferidas del código:
 
-Este es el archivo principal con el que documenté la limpieza. Partí de las
-tablas migradas al esquema fuente `tfm-sbs.siiccffaa` y creé el esquema
-analítico `tfm-sbs.siiccffaa_clean`.
+```text
+pandas
+requests
+google-auth
+Pillow
+```
 
-Durante este proceso:
+La autenticación espera una cuenta de servicio indicada mediante
+`GOOGLE_APPLICATION_CREDENTIALS`, ya sea como variable de entorno o dentro de
+un archivo `.env`. No se deben versionar el JSON de credenciales ni el `.env`.
 
-1. Creé el dataset destinado a los datos limpios.
-2. Depuré las dimensiones y conservé la versión más reciente de cada registro
-   mediante `ROW_NUMBER`, `updated_at` y `created_at`.
-3. Eliminé espacios innecesarios y normalicé textos mediante `TRIM` y
-   `REGEXP_REPLACE`.
-4. Construí las dimensiones de región, provincia, municipio, tipo de reporte,
-   institución, sucursal, departamento y grupo de reporte.
-5. Excluí registros sin identificador, registros marcados como eliminados y
-   fechas fuera del intervalo operativo definido.
-6. Sustituí patrones de correo electrónico y teléfono para reducir la
-   exposición de información personal en los textos.
-7. Integré la provincia incluida directamente en el reporte y, cuando no
-   estaba disponible, utilicé la relación `reports__provincias`.
-8. Validé las coordenadas usando un rango geográfico aproximado para la
-   República Dominicana. Cuando no eran válidas, mantuve el valor original para
-   auditoría y dejé nula la coordenada limpia.
-9. Normalicé los estados y las plataformas.
-10. Construí la tabla de hechos `fact_reportes_limpios`.
-11. Agregué los reportes por semana, provincia y tipo de reporte.
-12. Calculé rezagos de una, dos y cuatro semanas, una media móvil de cuatro
-    semanas, desviación estándar y variaciones porcentuales.
-13. Construí `dataset_maestro_modelado` con el grano semanal definido.
-14. Creé la variable objetivo
-    `incremento_actividad_siguiente_periodo`.
-15. Generé `data_quality_summary` para resumir los controles de calidad.
+## Resultados incluidos
 
-Definí la variable objetivo para indicar si el número de reportes de la semana
-siguiente superaba la media de las cuatro semanas anteriores. Cuando no existía
-información futura o no había suficiente historial, dejé el objetivo como
-nulo para no inventar información.
+La instantánea contiene los siguientes indicadores:
 
-### `script_python/03_script_original_creacion_bigquery.py`
+| Indicador | Resultado |
+|---|---:|
+| Registros originales | 175.317 |
+| Reportes limpios | 175.292 |
+| Registros excluidos por fecha | 25 |
+| Filas del Dataset Maestro | 20.147 |
+| Filas con variable objetivo | 18.128 (89,98 %) |
+| `report_id` duplicados | 0 |
+| Reportes sin provincia | 87.006 (49,63 %) |
+| Reportes con coordenadas válidas | 12 |
+| Descripciones faltantes | 9.807 (5,59 %) |
+| Outliers semanales según IQR | 2.358 (11,70 %) |
 
-Conservo este script porque fue el archivo histórico desde el que ejecuté las
-sentencias de creación y limpieza mediante la herramienta `bq`. Lo incluyo como
-evidencia de procedencia, aunque no es necesario volver a ejecutarlo para
-revisar los resultados.
+Principales limitaciones observadas:
 
-## 3. Cómo apliqué el análisis exploratorio de datos
+- El 49,63 % de los reportes no tiene provincia, lo que restringe el análisis
+  territorial.
+- Solo 12 registros tienen coordenadas válidas bajo el criterio aplicado; no
+  hay cobertura suficiente para un análisis geoespacial fiable.
+- El 10,02 % del Dataset Maestro no tiene etiqueta futura y el 5,60 % carece de
+  historial para el rezago de una semana.
+- `report_code` no es una clave única (4.590 repeticiones), mientras
+  `report_id` sí lo es en la tabla limpia.
+- El 11,70 % de las filas semanales supera el umbral IQR; debe estudiarse como
+  señal operativa antes de tratarlo como error.
 
-### `script_sql_for_data_cleaning/02_consultas_eda_y_validacion.sql`
+## Estado de consistencia de la evidencia
 
-Después de crear el esquema limpio ejecuté 20 consultas de EDA y validación.
-No utilicé estas consultas para modificar los datos, sino para comprobar el
-resultado de la limpieza.
+Los CSV incluidos fueron generados **antes** de aplicar la corrección del grano
+semanal: `06_duplicados.csv` registra 59 duplicados y
+`18_detalle_duplicados_grano.csv` conserva su detalle. El script correctivo
+está incluido, pero en esta instantánea no se aportan CSV regenerados que
+demuestren su resultado. Para cerrar esa validación se debe ejecutar la
+corrección en BigQuery y volver a generar las 20 consultas.
 
-Con ellas revisé:
+## Reproducción y requisitos externos
 
-- Las tablas y columnas del esquema limpio.
-- Los conteos y el resumen general de calidad.
-- Los valores faltantes en la tabla de hechos y en el Dataset Maestro.
-- Los duplicados de claves y del grano semanal.
-- La consistencia de fechas, provincias, coordenadas y variable objetivo.
-- La distribución temporal y la tendencia semanal.
-- Las provincias, tipos de reporte e instituciones con mayor frecuencia.
-- La distribución de la variable objetivo.
-- Los valores atípicos mediante el rango intercuartílico (IQR).
-- Las correlaciones entre variables numéricas.
-- El cruce entre provincia y categoría.
-- La auditoría de mis decisiones de limpieza.
-- La dimensión de grupos de reporte.
+Para reproducir el flujo original se necesitan:
 
-El archivo `script_sql_for_data_cleaning/eda_queries.sql` conserva el conjunto
-de consultas ejecutables que generé para esta fase.
+- Windows PowerShell, PostgreSQL/`psql`, Python y Google Cloud CLI (`gcloud` y
+  `bq`);
+- acceso autorizado a PostgreSQL, Cloud Storage y BigQuery;
+- el pipeline PostgreSQL original;
+- los CSV de carga, el manifiesto, los esquemas JSON y los SQL de creación de
+  vistas/validación esperados por los scripts de migración;
+- permisos para habilitar APIs, crear recursos y ejecutar trabajos BigQuery;
+- una cuenta de servicio para la automatización Python.
 
-## 4. Para qué utilicé `script_python`
+Esta copia no incluye varios de esos recursos. Además, `run_eda.py`,
+`test_connection.py` y `config.py` conservan nombres y rutas de la estructura
+original (`script_python`, `script_sql`, `outputs`), mientras aquí los archivos
+se encuentran en `Python_Scripts`, `SqlScript_Cleaning_Data`,
+`data_Generated_csv` e `informes.md`. Por ello, **no deben ejecutarse sin
+adaptar primero las rutas o restaurar la estructura original**.
 
-La carpeta `script_python` forma parte de la evidencia. En ella conservé la
-lógica que utilicé para ejecutar el EDA de forma reproducible. Cada archivo
-tuvo una función concreta:
+Cuando se disponga del proyecto completo y se hayan ajustado proyecto, región,
+datasets y rutas, el orden lógico es:
 
-### `config.py`
+1. Ejecutar la migración PowerShell.
+2. Ejecutar `01_creacion_limpieza_dataset_maestro.sql` en BigQuery.
+3. Aplicar `corregir_duplicados_dataset_maestro.sql` si corresponde.
+4. Probar la conexión de Python.
+5. Ejecutar el EDA y regenerar CSV e informes.
+6. Confirmar que la consulta 18 no devuelve filas y que los duplicados del
+   grano en la consulta 06 son cero.
 
-Aquí definí el proyecto `tfm-sbs`, la región, el dataset original
-`siiccffaa`, el dataset limpio `siiccffaa_clean` y las rutas donde debían
-guardarse los SQL, CSV, figuras e informes. Centralicé estos valores para no
-repetirlos en todos los scripts.
+## Trazabilidad
 
-### `bigquery_runner.py`
-
-En este archivo implementé la conexión con la API REST de BigQuery mediante
-credenciales de servicio. Lo utilicé para enviar cada consulta, esperar su
-finalización, recuperar todas las páginas de resultados, convertir las filas en
-un `DataFrame` de pandas y guardar cada resultado como CSV.
-
-### `queries.py`
-
-En este archivo definí las 20 consultas del EDA con sus nombres numerados.
-Incluí los controles de estructura, calidad, faltantes, duplicados,
-consistencia, distribuciones, tendencia, outliers, correlaciones y auditoría.
-
-### `visualizations.py`
-
-Utilicé este módulo para transformar los resultados tabulares en elementos
-visuales: tarjetas de indicadores, gráficos de barras, series temporales,
-diagramas del proceso y mapas de calor. Las figuras se generaron a partir de
-los resultados obtenidos, no de datos inventados manualmente.
-
-### `reporting.py`
-
-Este archivo contiene la lógica para generar informes Markdown y un dashboard
-HTML a partir de las métricas producidas por las consultas. En esta copia de la
-evidencia conservo los informes Markdown generados, pero no el dashboard HTML.
-
-### `__init__.py`
-
-Utilicé este archivo para identificar `script_python` como un paquete de Python
-y poder importar sus módulos desde el script de ejecución.
-
-### Ejecución del flujo
-
-En `script_python/run_eda.py` coordiné todo el proceso: preparé las carpetas de salida,
-generé el archivo SQL consolidado, ejecuté las 20 consultas, guardé los CSV,
-generé las visualizaciones y construí los informes y el dashboard. Utilicé
-`script_python/test_connection.py` para comprobar por separado que la conexión
-con BigQuery funcionaba antes de lanzar el análisis completo. El código puede
-generar otros archivos de salida al ejecutarse en su estructura original, pero
-esta carpeta conserva únicamente los artefactos enumerados en este README.
-
-## 5. Resultados que obtuve
-
-### `data_Generated_csv`
-
-Guardé aquí los 20 CSV resultantes de las consultas. Estos archivos muestran
-los conteos, la estructura, los faltantes, los duplicados, la consistencia, las
-distribuciones, las tendencias, los outliers, las correlaciones y la auditoría
-de limpieza.
-
-Los CSV no realizaron la limpieza. Los conservé como evidencia de los
-resultados que obtuve al comprobar el dataset después de transformarlo.
-
-### `informes.md/INFORME_EJECUTIVO_EDA.md`
-
-En este informe resumí los principales hallazgos del análisis exploratorio y
-los controles de calidad realizados.
-
-### `informes.md/PLANTILLA_DOCUMENTACION_EDA_COMPLETA.md`
-
-En este archivo organicé la documentación completa de las comprobaciones,
-indicadores y resultados del EDA.
-
-### `informes.md/METODOLOGIA_PRACTICA_EDA.md`
-
-En este documento describí el enfoque práctico seguido para revisar la
-estructura, la calidad, los faltantes, los duplicados, la consistencia, las
-distribuciones, los outliers, las relaciones numéricas y la variable objetivo.
-
-## Cómo interpreto esta evidencia
-
-- Con `Migrator_SqlScript` documento el flujo automatizado de migración desde
-  PostgreSQL, pasando por CSV y Cloud Storage, hasta BigQuery, junto con sus
-  comprobaciones previas y validaciones posteriores.
-- Con `script_sql_for_data_cleaning/01_creacion_limpieza_dataset_maestro.sql`
-  documento las reglas de limpieza, transformación y construcción del Dataset
-  Maestro aplicadas en BigQuery.
-- Con `script_sql_for_data_cleaning/02_consultas_eda_y_validacion.sql` y
-  `script_sql_for_data_cleaning/eda_queries.sql` conservo las consultas
-  utilizadas para aplicar el EDA y validar el esquema limpio.
-- Con `script_python` documento la automatización de las 20 consultas, la
-  exportación de resultados y la generación programática de visualizaciones e
-  informes.
-- Con los 20 CSV de `data_Generated_csv` conservo los resultados tabulares de
-  las comprobaciones. Estos archivos muestran resultados; no ejecutan la
-  limpieza ni sustituyen las reglas SQL.
-- Con los documentos de `informes.md` presento la metodología, los hallazgos,
-  las limitaciones y la interpretación ejecutiva de los resultados.
-
-En conjunto, estos archivos permiten seguir la trazabilidad desde la migración
-hasta la validación del dataset limpio. La reproducción completa requiere las
-fuentes, credenciales, permisos y recursos externos utilizados en PostgreSQL,
-Cloud Storage y BigQuery.
+En conjunto, el repositorio permite auditar las reglas aplicadas y relacionar
+cada control con su resultado. La reproducibilidad completa depende de los
+recursos externos y de la estructura original descritos en la sección
+anterior.

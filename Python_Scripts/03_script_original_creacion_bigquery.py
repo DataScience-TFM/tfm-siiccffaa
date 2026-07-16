@@ -234,15 +234,15 @@ STATEMENTS = [
     CLUSTER BY provincia_id, report_type_id AS
     SELECT
       report_week_start,
-      report_year,
-      report_iso_week,
+      EXTRACT(ISOYEAR FROM report_week_start) AS report_year,
+      EXTRACT(ISOWEEK FROM report_week_start) AS report_iso_week,
       provincia_id,
-      COALESCE(provincia_name, 'sin_provincia') AS provincia_name,
-      region_id,
-      COALESCE(region_name, 'sin_region') AS region_name,
+      ANY_VALUE(COALESCE(provincia_name, 'sin_provincia')) AS provincia_name,
+      ANY_VALUE(region_id) AS region_id,
+      ANY_VALUE(COALESCE(region_name, 'sin_region')) AS region_name,
       report_type_id,
-      report_type_name,
-      report_type_category,
+      ANY_VALUE(report_type_name) AS report_type_name,
+      ANY_VALUE(report_type_category) AS report_type_category,
       COUNT(*) AS reportes_semana,
       COUNTIF(has_media) AS reportes_con_media,
       COUNTIF(has_valid_coordinates) AS reportes_con_coordenadas_validas,
@@ -254,9 +254,7 @@ STATEMENTS = [
     WHERE provincia_id IS NOT NULL
       AND report_type_id IS NOT NULL
     GROUP BY
-      report_week_start, report_year, report_iso_week,
-      provincia_id, provincia_name, region_id, region_name,
-      report_type_id, report_type_name, report_type_category
+      report_week_start, provincia_id, report_type_id
     """,
     f"""
     CREATE OR REPLACE TABLE {CLEAN}.dataset_maestro_modelado
