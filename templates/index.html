@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>EDA SIICCFFAA · Diario Ejecutivo</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='styles.css') }}"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='live.css') }}"
+    />
+  </head>
+  <body>
+    <header class="hero">
+      <div>
+        <p class="eyebrow">TFM · Módulo de Ciencia de Datos</p>
+        <h1>para el Diario Ejecutivo de la Dirección de Operaciones del C5i</h1>
+        <p>
+          Resultados del análisis exploratorio, calidad de los datos, Dataset
+          Maestro y preparación para el modelado predictivo.
+        </p>
+      </div>
+    </header>
+    <nav>
+      <a href="#resumen">Resumen</a><a href="#graficos">Gráficos</a
+      ><a href="#datos">Datos</a>
+      <form action="/refresh" method="post">
+        <button>Actualizar desde BigQuery</button>
+      </form>
+    </nav>
+    <main>
+      <section id="resumen">
+        <div class="source">
+          <strong>Fuente en vivo:</strong>
+          <code>tfm-sbs.siiccffaa_clean</code> · caché de {{ cache_minutes }}
+          minutos para controlar coste y latencia.
+        </div>
+        <div class="title">
+          <b>01</b>
+          <div>
+            <h2>Resumen analítico</h2>
+            <p>
+              Indicadores consultados directamente en BigQuery por el servidor
+              Python.
+            </p>
+          </div>
+        </div>
+        <div class="metrics">
+          {% for label,value in cards %}
+          <article>
+            <strong>{{ "{:,.0f}".format(value) }}</strong
+            ><span>{{ label }}</span>
+          </article>
+          {% endfor %}
+        </div>
+      </section>
+      <section id="graficos">
+        <div class="title">
+          <b>02</b>
+          <div>
+            <h2>Visualizaciones interactivas</h2>
+            <p>
+              Cada gráfico se construye en la web con los resultados consultados
+              en BigQuery.
+            </p>
+          </div>
+        </div>
+        <div class="filters">
+          <button class="active" data-filter="all">Todos</button>{% for
+          key,label in
+          [('calidad','Calidad'),('temporal','Temporal'),('territorio','Territorio'),('operacional','Operacional'),('modelado','Modelado')]
+          %}<button data-filter="{{ key }}">{{ label }}</button>{% endfor %}
+        </div>
+        <div class="grid">
+          {% for chart in charts %}
+          <article class="chart" data-category="{{ chart.category }}">
+            <div>
+              <small>{{ chart.category }}</small>
+              <h3>{{ chart.title }}</h3>
+            </div>
+            <div class="plot" id="plot-{{ loop.index }}"></div>
+          </article>
+          {% endfor %}
+        </div>
+      </section>
+      <section id="datos">
+        <div class="title">
+          <b>03</b>
+          <div>
+            <h2>Resultados tabulares</h2>
+            <p>Explorador de las 20 salidas reproducibles del análisis.</p>
+          </div>
+        </div>
+        <div class="controls">
+          <select id="dataset">
+            {% for name in datasets %}
+            <option>{{ name }}</option>
+            {% endfor %}</select
+          ><span id="count"></span>
+        </div>
+        <div class="table">
+          <table>
+            <thead id="head"></thead>
+            <tbody id="body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <footer>
+      Fuente: BigQuery · <code>tfm-sbs.siiccffaa_clean</code> · Dashboard
+      servido con Python
+    </footer>
+    <script src="/plotly.js"></script>
+    <script>
+      const filters=document.querySelectorAll('[data-filter]');filters.forEach(b=>b.onclick=()=>{filters.forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.chart').forEach(c=>c.hidden=b.dataset.filter!=='all'&&c.dataset.category!==b.dataset.filter)});
+      const charts={{ charts|tojson }};
+      const number=v=>{const n=Number(v);return Number.isFinite(n)?n:0};
+      async function drawChart(spec,index){const result=await(await fetch('/data/'+spec.query)).json();const rows=result.rows;let traces=[];
+      if(spec.type==='bar')traces=[{type:'bar',x:rows.map(r=>r[spec.x]),y:rows.map(r=>number(r[spec.y])),marker:{color:'#176b91'}}];
+      if(spec.type==='line')traces=[{type:'scatter',mode:'lines+markers',x:rows.map(r=>r[spec.x]),y:rows.map(r=>number(r[spec.y])),line:{color:'#176b91',width:3},marker:{size:5}}];
+      if(spec.type==='pie')traces=[{type:'pie',labels:rows.map(r=>r[spec.x]),values:rows.map(r=>number(r[spec.y])),hole:.48,marker:{colors:['#176b91','#39b7c9','#e8a33c']}}];
+      if(spec.type==='year'){const totals={};rows.forEach(r=>totals[r.report_year]=(totals[r.report_year]||0)+number(r.reportes));traces=[{type:'bar',x:Object.keys(totals),y:Object.values(totals),marker:{color:'#176b91'}}]}
+      if(spec.type==='heatmap'){const xs=[...new Set(rows.map(r=>r.report_type_category))],ys=[...new Set(rows.map(r=>r.provincia_name))],map=new Map(rows.map(r=>[r.provincia_name+'|'+r.report_type_category,number(r.reportes)]));traces=[{type:'heatmap',x:xs,y:ys,z:ys.map(y=>xs.map(x=>map.get(y+'|'+x)||0)),colorscale:[[0,'#edf7f8'],[1,'#176b91']]}]}
+      Plotly.newPlot('plot-'+index,traces,{margin:{l:70,r:20,t:15,b:100},paper_bgcolor:'#fff',plot_bgcolor:'#fff',font:{family:'Segoe UI, Arial'},xaxis:{automargin:true},yaxis:{automargin:true}},{responsive:true,displaylogo:false,locale:'es'});}
+      charts.forEach((chart,i)=>drawChart(chart,i+1));
+      const select=document.querySelector('#dataset');const esc=v=>{const d=document.createElement('div');d.textContent=v??'';return d.innerHTML};async function load(){const d=await(await fetch('/data/'+encodeURIComponent(select.value))).json();document.querySelector('#count').textContent=d.total.toLocaleString('es-ES')+' filas';document.querySelector('#head').innerHTML='<tr>'+d.columns.map(c=>'<th>'+esc(c)+'</th>').join('')+'</tr>';document.querySelector('#body').innerHTML=d.rows.map(r=>'<tr>'+d.columns.map(c=>'<td>'+esc(r[c])+'</td>').join('')+'</tr>').join('')}select.onchange=load;load();
+    </script>
+  </body>
+</html>
