@@ -94,6 +94,7 @@
           <article><h3>Variable objetivo</h3><p id="finding-target">Calculando…</p></article>
           <article><h3>Valores atípicos</h3><p id="finding-outliers">Calculando…</p></article>
           <article><h3>Relación temporal</h3><p id="finding-correlation">Calculando…</p></article>
+          <article><h3>Integridad del grano</h3><p id="finding-duplicates">Calculando…</p></article>
         </div>
         <p class="interpretation-note">Estos hallazgos describen asociaciones y distribuciones; no demuestran relaciones causales.</p>
       </section>
@@ -105,6 +106,8 @@
           <li>El IQR identifica observaciones inusuales estadísticamente, pero no permite concluir por sí solo que sean errores.</li>
           <li>Las correlaciones son descriptivas: no implican causalidad y pueden estar condicionadas por estacionalidad, cobertura o cambios operativos.</li>
           <li>Las primeras semanas de cada serie pueden carecer de retardos o medias móviles; el último periodo puede no disponer de variable objetivo.</li>
+          <li>La clase incremento es menos frecuente que la clase no incremento; el modelado deberá utilizar métricas adecuadas para clases desbalanceadas y validación temporal.</li>
+          <li>La unicidad del grano fue corregida y actualmente se verifica como control de calidad; nuevas cargas podrían reintroducir duplicados si no mantienen la agregación por semana ISO, provincia y tipo de reporte.</li>
           <li>Los resultados reflejan la versión del dataset disponible al ejecutar la consulta y pueden cambiar con nuevas cargas o correcciones.</li>
         </ul></div>
       </section>
@@ -150,8 +153,24 @@
       Plotly.newPlot('plot-'+index,traces,{margin:{l:70,r:20,t:15,b:100},paper_bgcolor:'#fff',plot_bgcolor:'#fff',font:{family:'Segoe UI, Arial'},xaxis:{automargin:true},yaxis:{automargin:true}},{responsive:true,displaylogo:false,locale:'es'});}
       charts.forEach((chart,i)=>drawChart(chart,i+1));
       const getData=async name=>await(await fetch('/data/'+name)).json();
-      async function loadFindings(){try{const [p,t,target,iqr,corr]=await Promise.all(['10_top_provincias','11_top_tipos_reporte','14_distribucion_target','15_outliers_iqr_reportes_semana','16_correlaciones_numericas'].map(getData));const first=a=>a.rows[0]||{};const pr=first(p),tr=first(t),ir=first(iqr),cr=first(corr);const targetRows=target.rows,totalTarget=targetRows.reduce((s,r)=>s+number(r.filas),0),inc=targetRows.find(r=>r.target_class==='incremento');document.querySelector('#finding-province').textContent=pr.provincia_name?`${pr.provincia_name} encabeza el recuento con ${number(pr.reportes).toLocaleString('es-ES')} reportes.`:'No hay datos suficientes.';document.querySelector('#finding-type').textContent=tr.report_type_name?`${tr.report_type_name} es el tipo más frecuente, con ${number(tr.reportes).toLocaleString('es-ES')} reportes.`:'No hay datos suficientes.';document.querySelector('#finding-target').textContent=totalTarget&&inc?`${(100*number(inc.filas)/totalTarget).toFixed(1)} % de las filas evaluadas pertenecen a la clase incremento.`:'No hay datos suficientes.';document.querySelector('#finding-outliers').textContent=ir.total_rows?`${number(ir.outlier_rows).toLocaleString('es-ES')} filas (${number(ir.outlier_pct).toFixed(2)} %) quedan fuera de los límites IQR [${number(ir.lower_limit).toFixed(2)}, ${number(ir.upper_limit).toFixed(2)}].`:'No hay datos suficientes.';document.querySelector('#finding-correlation').textContent=cr.variable?`${cr.variable} presenta la correlación lineal de mayor magnitud con reportes_semana (r = ${number(cr.corr_with_reportes_semana).toFixed(3)}).`:'No hay datos suficientes.'}catch(e){document.querySelectorAll('#insights p').forEach(x=>x.textContent='No fue posible calcular este hallazgo.');}}
+      async function loadFindings(){
+        try {
+          const names=['10_top_provincias','11_top_tipos_reporte','14_distribucion_target','15_outliers_iqr_reportes_semana','16_correlaciones_numericas'];
+          const [p,t,target,iqr,corr]=await Promise.all(names.map(getData));
+          const first=a=>a.rows[0]||{},pr=first(p),tr=first(t),ir=first(iqr),cr=first(corr);
+          const targetRows=target.rows,knownTarget=targetRows.filter(r=>r.target_class!=='sin_target').reduce((s,r)=>s+number(r.filas),0),inc=targetRows.find(r=>r.target_class==='incremento');
+          document.querySelector('#finding-province').textContent=pr.provincia_name?`${pr.provincia_name} encabeza el recuento con ${number(pr.reportes).toLocaleString('es-ES')} reportes.`:'No hay datos suficientes.';
+          document.querySelector('#finding-type').textContent=tr.report_type_name?`${tr.report_type_name} es el tipo más frecuente, con ${number(tr.reportes).toLocaleString('es-ES')} reportes.`:'No hay datos suficientes.';
+          document.querySelector('#finding-target').textContent=knownTarget&&inc?`${(100*number(inc.filas)/knownTarget).toFixed(1)} % de las filas con target conocido pertenecen a la clase incremento.`:'No hay datos suficientes.';
+          document.querySelector('#finding-outliers').textContent=ir.total_rows?`${number(ir.outlier_rows).toLocaleString('es-ES')} filas (${number(ir.outlier_pct).toFixed(2)} %) quedan fuera de los límites IQR [${number(ir.lower_limit).toFixed(2)}, ${number(ir.upper_limit).toFixed(2)}].`:'No hay datos suficientes.';
+          document.querySelector('#finding-correlation').textContent=cr.variable?`${cr.variable} presenta la correlación lineal de mayor magnitud con reportes_semana (r = ${number(cr.corr_with_reportes_semana).toFixed(3)}).`:'No hay datos suficientes.';
+        } catch(e) {
+          document.querySelectorAll('#insights p').forEach(x=>x.textContent='No fue posible calcular este hallazgo.');
+        }
+      }
       loadFindings();
+      async function loadDuplicateFinding(){try{const d=await getData('06_duplicados'),row=d.rows.find(r=>r.check_name==='dataset_maestro_modelado.grain'),duplicates=number(row&&row.duplicated_keys);document.querySelector('#finding-duplicates').textContent=duplicates===0?'El Dataset Maestro conserva una fila por semana, provincia y tipo de reporte: no se detectan duplicados en el grano analítico.':`Se detectan ${duplicates.toLocaleString('es-ES')} filas adicionales en el grano analítico; deben corregirse antes del modelado.`}catch(e){document.querySelector('#finding-duplicates').textContent='No fue posible verificar la unicidad del grano.';}}
+      loadDuplicateFinding();
       const select=document.querySelector('#dataset');const esc=v=>{const d=document.createElement('div');d.textContent=v??'';return d.innerHTML};async function load(){const d=await(await fetch('/data/'+encodeURIComponent(select.value))).json();document.querySelector('#count').textContent=d.total.toLocaleString('es-ES')+' filas';document.querySelector('#head').innerHTML='<tr>'+d.columns.map(c=>'<th>'+esc(c)+'</th>').join('')+'</tr>';document.querySelector('#body').innerHTML=d.rows.map(r=>'<tr>'+d.columns.map(c=>'<td>'+esc(r[c])+'</td>').join('')+'</tr>').join('')}select.onchange=load;load();
     </script>
   </body>

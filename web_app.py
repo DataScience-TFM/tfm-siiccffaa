@@ -27,6 +27,7 @@ CHARTS = [
     {"category": "operacional", "title": "Principales instituciones", "query": "12_top_instituciones", "type": "bar", "x": "company_name", "y": "reportes"},
     {"category": "calidad", "title": "Valores faltantes en reportes", "query": "04_faltantes_fact_reportes", "type": "bar", "x": "column_name", "y": "missing_pct"},
     {"category": "calidad", "title": "Valores faltantes en Dataset Maestro", "query": "05_faltantes_dataset_maestro", "type": "bar", "x": "column_name", "y": "missing_pct"},
+    {"category": "calidad", "title": "Duplicados por clave o grano analítico", "query": "06_duplicados", "type": "bar", "x": "check_name", "y": "duplicated_keys"},
     {"category": "modelado", "title": "Distribución de la variable objetivo", "query": "14_distribucion_target", "type": "pie", "x": "target_class", "y": "filas"},
     {"category": "modelado", "title": "Correlaciones numéricas", "query": "16_correlaciones_numericas", "type": "bar", "x": "variable", "y": "corr_with_reportes_semana"},
     {"category": "modelado", "title": "Valores atípicos mediante IQR", "query": "15_outliers_iqr_reportes_semana", "type": "iqr"},

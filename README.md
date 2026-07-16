@@ -150,7 +150,7 @@ Definen el diseño visual general y los ajustes específicos de la aplicación c
 
 ## Contenido del análisis exploratorio
 
-El dashboard cubre los siguientes apartados:
+Organicé el dashboard para cubrir los siguientes apartados:
 
 1. Objetivo del análisis y contexto operativo.
 2. Carga en vivo del dataset limpio desde BigQuery.
@@ -162,22 +162,51 @@ El dashboard cubre los siguientes apartados:
 8. Hallazgos principales calculados automáticamente a partir de los resultados actuales.
 9. Limitaciones metodológicas y de calidad de los datos.
 
+Entre las visualizaciones de calidad incorporé un gráfico de duplicados. Con este gráfico comparo las claves repetidas de `fact_reportes_limpios` con las repeticiones del grano esperado del Dataset Maestro (`report_week_start`, `provincia_id`, `report_type_id`). La altura de cada barra representa las filas adicionales que impiden que la clave o el grano sean únicos.
+
+### Corrección de duplicados del Dataset Maestro
+
+Durante la validación detecté que el Dataset Maestro contenía 20.147 filas, pero solamente 20.088 combinaciones únicas de semana, provincia y tipo de reporte. Esto significaba que existían 59 filas adicionales en el grano analítico. Antes de continuar con el modelado decidí investigar la causa en lugar de eliminar las filas automáticamente.
+
+Al revisar el detalle comprobé que las repeticiones se concentraban en las semanas iniciadas el 26 de diciembre de 2022 y el 29 de diciembre de 2025. Estas semanas cruzaban el cambio de año. La agregación original agrupaba simultáneamente por `report_week_start`, `report_year` y `report_iso_week`, por lo que una misma semana podía dividirse en dos registros cuando una parte de sus días pertenecía a diciembre y otra a enero.
+
+Corregí la construcción de `agg_reportes_semanal` para utilizar como grano únicamente `report_week_start`, `provincia_id` y `report_type_id`. Después calculé el año mediante `EXTRACT(ISOYEAR FROM report_week_start)` y la semana mediante `EXTRACT(ISOWEEK FROM report_week_start)`. De esta manera mantuve cada semana ISO como una sola unidad, incluso cuando cruza de un año a otro.
+
+Antes de sustituir las tablas conservé copias de respaldo de las versiones originales:
+
+- `agg_reportes_semanal_before_dedup_20260716`.
+- `dataset_maestro_modelado_before_dedup_20260716`.
+
+Después reconstruí `agg_reportes_semanal` y `dataset_maestro_modelado`. También recalculé los rezagos, las medias móviles, la actividad de la semana siguiente y la variable objetivo `incremento_actividad_siguiente_periodo`. Finalmente actualicé `data_quality_summary` para que las tarjetas y los gráficos del dashboard utilizaran los nuevos conteos.
+
+La validación final produjo los siguientes resultados:
+
+- 20.088 filas en el Dataset Maestro.
+- 20.088 combinaciones únicas de semana, provincia y tipo de reporte.
+- Cero filas duplicadas en el grano analítico.
+- 88.286 reportes agregados, el mismo volumen existente antes de la corrección.
+- 18.069 filas con variable objetivo conocida después de recalcular la secuencia temporal.
+
+No eliminé reportes operacionales. Las 59 filas retiradas eran divisiones artificiales de semanas que debían representar una única observación. Dejé la corrección reproducible en `sql/corregir_duplicados_dataset_maestro.sql` y mantuve el gráfico de duplicados como control permanente para detectar si una carga futura vuelve a introducir este problema.
+
 ### Valores atípicos mediante IQR
 
-La consulta `15_outliers_iqr_reportes_semana` calcula Q1, Q3 y el rango intercuartílico (`IQR = Q3 - Q1`). Se consideran posibles valores atípicos aquellos situados fuera de `Q1 - 1,5 × IQR` y `Q3 + 1,5 × IQR`. El dashboard representa cuántas filas permanecen dentro de esos límites y cuántas quedan fuera. Un valor atípico no se considera automáticamente un error: puede reflejar un evento operativo real que requiere revisión.
+Con la consulta `15_outliers_iqr_reportes_semana` calculo Q1, Q3 y el rango intercuartílico (`IQR = Q3 - Q1`). Considero posibles valores atípicos aquellos situados fuera de `Q1 - 1,5 × IQR` y `Q3 + 1,5 × IQR`. En el dashboard represento cuántas filas permanecen dentro de esos límites y cuántas quedan fuera. No considero automáticamente un valor atípico como un error, porque puede reflejar un evento operativo real que requiere revisión.
 
 ### Hallazgos principales
 
-La sección de hallazgos se actualiza con los datos obtenidos de BigQuery y resume la provincia y el tipo de reporte con mayor frecuencia, la proporción de la clase incremento, la cantidad y porcentaje de atípicos y la correlación lineal de mayor magnitud con `reportes_semana`. Son resultados descriptivos y no demuestran causalidad.
+Configuré la sección de hallazgos para que se actualice con los datos obtenidos de BigQuery. En ella resumo la provincia y el tipo de reporte con mayor frecuencia, la proporción de la clase incremento, la cantidad y porcentaje de atípicos, la correlación lineal de mayor magnitud con `reportes_semana` y la unicidad del grano del Dataset Maestro. Tras corregir las semanas que cruzan un cambio de año, obtuve 20.088 filas, 20.088 combinaciones únicas y cero duplicados, conservando 88.286 reportes agregados. Interpreto estos resultados como descripciones de los datos y no como demostraciones de causalidad.
 
 ### Limitaciones
 
-- La calidad de las conclusiones depende de la integridad y exactitud de los datos originales.
-- Los registros sin provincia, las coordenadas no válidas y los valores ausentes pueden reducir la representatividad de algunos cruces.
-- El IQR identifica observaciones inusuales, pero no determina por sí mismo si son errores.
-- Las correlaciones describen asociaciones y no relaciones causales.
-- Las primeras semanas pueden carecer de retardos o medias móviles, y el último periodo puede no tener target conocido.
-- Los resultados corresponden a la versión de BigQuery disponible al ejecutar las consultas y pueden cambiar tras nuevas cargas o correcciones.
+- Reconozco que la calidad de mis conclusiones depende de la integridad y exactitud de los datos originales.
+- Tengo en cuenta que los registros sin provincia, las coordenadas no válidas y los valores ausentes pueden reducir la representatividad de algunos cruces.
+- Utilizo el IQR para identificar observaciones inusuales, pero no concluyo solamente con este criterio que sean errores.
+- Interpreto las correlaciones como asociaciones y no como relaciones causales.
+- Mantengo como nulos los retardos y las medias móviles cuando no existe historial suficiente; el último periodo también puede quedar sin target conocido.
+- Como la clase incremento es menos frecuente que la clase no incremento, no evaluaré un modelo únicamente mediante exactitud.
+- Aunque corregí la unicidad del grano, volveré a comprobarla después de cada carga para evitar que futuras transformaciones reintroduzcan duplicados.
+- Los resultados reflejan la versión de BigQuery disponible cuando ejecuto las consultas y pueden cambiar después de nuevas cargas o correcciones.
 
 ## Funcionamiento interno
 
