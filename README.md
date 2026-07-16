@@ -137,19 +137,19 @@ Definen el diseño visual general y los ajustes específicos de la aplicación c
 ## Funcionamiento interno
 
 ```text
-.env y cuenta de servicio
-          ↓
-src/bigquery_runner.py
-          ↓
-src/queries.py
-          ↓
-API REST HTTPS de BigQuery
-          ↓
-DataFrames en memoria
-          ↓
-web_app.py / Flask
-          ↓
-Plotly en el navegador
+1- .env y cuenta de servicio
+          
+2- src/bigquery_runner.py
+          
+3- src/queries.py
+          
+4- API REST HTTPS de BigQuery
+          
+5- DataFrames en memoria
+          
+6- web_app.py / Flask
+          
+7- Plotly en el navegador
 ```
 
 La dirección `127.0.0.1` indica que el servidor se ejecuta en el ordenador del evaluador. Los datos se siguen consultando en BigQuery por Internet.
