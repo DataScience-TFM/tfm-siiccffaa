@@ -47,20 +47,7 @@ Después de descargar o descomprimir el proyecto debe realizar lo siguiente:
 La estructura esperada es:
 
 ```text
-Proyecto_Python_Modelado/
-├── credentials/
-│   └── tfm-evaluacion-api.json
-├── models/
-├── outputs/
-├── sql/
-├── src/
-├── static/
-├── templates/
-├── requirements.txt
-├── run_all.ps1
-├── run_model.ps1
-├── run_dashboard.ps1
-└── run_diario.ps1
+![alt text](image.png)
 ```
 
 El proyecto detecta automáticamente `credentials/tfm-evaluacion-api.json`. También mantiene compatibilidad con el nombre anterior `tfm-evaluacion-api.key`.
