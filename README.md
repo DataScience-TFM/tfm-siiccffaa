@@ -46,9 +46,7 @@ Después de descargar o descomprimir el proyecto debe realizar lo siguiente:
 
 La estructura esperada es:
 
-```text
 ![alt text](image.png)
-```
 
 El proyecto detecta automáticamente `credentials/tfm-evaluacion-api.json`. También mantiene compatibilidad con el nombre anterior `tfm-evaluacion-api.key`.
 
