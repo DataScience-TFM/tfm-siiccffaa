@@ -1,0 +1,23 @@
+{
+  "modelo": "regresion_logistica",
+  "target": "incremento_actividad_siguiente_periodo",
+  "features": [
+    "reportes_lag_1w",
+    "reportes_lag_2w",
+    "reportes_lag_4w",
+    "reportes_media_4w_previa",
+    "reportes_std_4w_previa",
+    "provincia_id",
+    "report_type_id",
+    "mes",
+    "semana_anio"
+  ],
+  "train_end": "2024-12-09",
+  "validation_end": "2025-08-25",
+  "threshold": 0.6700000000000004,
+  "rows": {
+    "train": 61513,
+    "validation": 9641,
+    "test": 5807
+  }
+}

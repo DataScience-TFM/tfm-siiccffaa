@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Diario Ejecutivo SIICCFFAA</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='diario_ejecutivo.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='diario_print_fix.css') }}">
+</head>
+<body class="bg-slate-100 text-slate-900">
+  {% if load_error %}<main class="max-w-4xl mx-auto p-10"><div class="bg-red-50 border border-red-200 rounded-xl p-6"><h1 class="text-xl font-bold">No se pudo generar el Diario Ejecutivo</h1><p>{{ load_error }}</p><p>Ejecute <code>generate_diario.py</code>.</p></div></main>
+  {% else %}
+  {% if not print_mode %}<nav class="screen-toolbar"><a href="/">← Resultados del modelo</a><div><button onclick="location.reload()">Actualizar vista</button><a class="download" href="/diario/pdf">Descargar PDF</a></div></nav>{% endif %}
+  <main class="report max-w-6xl mx-auto bg-white">
+    <header class="report-header">
+      <img class="mide-logo" src="{{ url_for('static', filename='assets/logo_mide.jpeg') }}" alt="Emblema del Ministerio de Defensa">
+      <div class="title-block"><p>REPÚBLICA DOMINICANA</p><h1>DIARIO EJECUTIVO</h1><h2>Señales operacionales y predicción de actividad</h2></div>
+      <img class="c5i-logo" src="{{ url_for('static', filename='assets/logo_c5i.jpeg') }}" alt="Logo C5i">
+    </header>
+    <div class="classification">DOCUMENTO ANALÍTICO · APOYO A LA REVISIÓN HUMANA</div>
+
+    <section class="period-grid">
+      <div><span>Semana observada</span><strong>{{ report.source_week }}</strong></div>
+      <div><span>Semana estimada</span><strong>{{ report.prediction_week }}</strong></div>
+      <div><span>Modelo</span><strong>{{ report.model }}</strong></div>
+      <div><span>Umbral</span><strong>{{ "%.0f%%"|format(report.threshold*100) }}</strong></div>
+    </section>
+
+    <section class="executive-summary">
+      <div><p class="kicker">Resumen ejecutivo</p><h3>Panorama para priorización</h3><p>Analicé <b>{{ report.total_evaluated }}</b> combinaciones operativas correspondientes a la última semana disponible. El ranking presenta las señales con mayor probabilidad estimada de incremento para el periodo siguiente.</p></div>
+      <div class="summary-cards">
+        <article><span>Operaciones observadas</span><b>{{ report.total_operations }}</b></article>
+        <article class="high"><span>Prioridad alta</span><b>{{ report.high_priority }}</b></article>
+        <article class="medium"><span>Prioridad media</span><b>{{ report.medium_priority }}</b></article>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-title"><div><p class="kicker">Situación operacional</p><h3>Señales priorizadas</h3></div><p>Ordenadas por probabilidad estimada</p></div>
+      <div class="signal-list">
+      {% for item in report.signals %}
+        <article class="signal-card">
+          <div class="rank">{{ "%02d"|format(loop.index) }}</div>
+          <div class="signal-main"><div class="signal-head"><div><h4>{{ item.provincia }}</h4><p>{{ item.tipo_reporte }}</p></div><span class="priority {{ item.prioridad|lower }}">{{ item.prioridad }}</span></div>
+            <div class="signal-metrics"><div><span>Operaciones</span><b>{{ item.operaciones_semana }}</b></div><div><span>Media 4 semanas</span><b>{{ item.media_4w if item.media_4w is not none else 'N/D' }}</b></div><div><span>Tendencia</span><b>{{ item.tendencia }}{% if item.variacion_pct is not none %} · {{ "%+.1f%%"|format(item.variacion_pct) }}{% endif %}</b></div><div class="prob"><span>Probabilidad</span><b>{{ "%.1f%%"|format(item.probabilidad*100) }}</b></div></div>
+            <p class="signal-note">{{ item.mensaje }}</p>
+          </div>
+        </article>
+      {% endfor %}
+      </div>
+    </section>
+
+    <section class="methodology"><p class="kicker">Criterio de lectura</p><h3>Cómo interpretar este documento</h3><div class="method-grid"><p><b>Operaciones:</b> volumen registrado en la semana observada para la combinación territorial y operacional.</p><p><b>Media 4 semanas:</b> referencia histórica reciente calculada exclusivamente con periodos anteriores.</p><p><b>Tendencia:</b> comparación porcentual de la actividad actual contra la media previa.</p><p><b>Probabilidad:</b> puntuación del modelo para ordenar la revisión; no representa certeza ni causalidad.</p></div><div class="warning">{{ report.method_note }}</div></section>
+    <footer><span>SIICCFFAA · C5i · Diario Ejecutivo</span><span>Generado: {{ report.generated_at[:19]|replace('T',' ') }} UTC</span></footer>
+  </main>
+  {% endif %}
+</body>
+</html>

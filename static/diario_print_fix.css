@@ -1,0 +1,33 @@
+@media print {
+  .signal-list {
+    display: block !important;
+  }
+
+  .signal-card {
+    display: table !important;
+    width: 100% !important;
+    table-layout: fixed !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    margin-bottom: 6px !important;
+    overflow: visible !important;
+  }
+
+  .signal-card .rank {
+    display: table-cell !important;
+    width: 42px !important;
+    vertical-align: middle !important;
+    text-align: center !important;
+  }
+
+  .signal-card .signal-main {
+    display: table-cell !important;
+    vertical-align: top !important;
+    padding: 9px 12px !important;
+  }
+
+  .methodology {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+}

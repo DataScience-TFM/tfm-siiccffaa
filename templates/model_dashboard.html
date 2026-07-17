@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Resultados del modelo SIICCFFAA</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='model_dashboard.css') }}">
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <p class="eyebrow">TFM · SIICCFFAA</p>
+      <h1>Resultados del modelo predictivo</h1>
+      <p class="subtitle">Regresión logística para priorizar incrementos de actividad operacional.</p>
+      {% if not load_error %}
+      <div class="status"><span></span> Resultados cargados · última semana {{ last_week }}</div>
+      {% endif %}
+    </div>
+  </header>
+
+  <main>
+    {% if load_error %}
+      <section class="error"><h2>No se pudo cargar el dashboard</h2><p>{{ load_error }}</p><p>Ejecute primero <code>.\run_model.ps1</code>.</p></section>
+    {% else %}
+    <section class="section intro-grid">
+      <div>
+        <p class="section-kicker">Resumen</p>
+        <h2>Lectura ejecutiva</h2>
+        <p>El modelo ordena combinaciones de provincia y tipo de reporte según su probabilidad de incremento. Las señales son apoyo para revisión humana, no decisiones automáticas.</p>
+      </div>
+      <dl class="metadata">
+        <div><dt>Fin de entrenamiento</dt><dd>{{ metadata.train_end }}</dd></div>
+        <div><dt>Fin de validación</dt><dd>{{ metadata.validation_end }}</dd></div>
+        <div><dt>Filas de prueba</dt><dd>{{ "{:,}".format(metadata.rows.test) }}</dd></div>
+        <div><dt>Umbral elegido</dt><dd>{{ "%.2f"|format(metrics.threshold) }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="section">
+      <p class="section-kicker">Rendimiento</p><h2>Métricas de la regresión logística</h2>
+      <div class="cards">
+        {% for label, key in [('Precisión','precision'),('Recall','recall'),('F1','f1'),('PR-AUC','pr_auc'),('ROC-AUC','roc_auc'),('Precision@20','precision_at_20')] %}
+        <article class="metric-card"><span>{{ label }}</span><strong>{{ "%.3f"|format(metrics[key]) }}</strong><div class="meter"><i style="width: {{ metrics[key] * 100 }}%"></i></div></article>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="section">
+      <p class="section-kicker">Comparación</p><h2>Modelos evaluados</h2>
+      <div class="table-wrap"><table><thead><tr><th>Modelo</th><th>Precisión</th><th>Recall</th><th>F1</th><th>PR-AUC</th><th>ROC-AUC</th><th>Precision@20</th></tr></thead><tbody>
+      {% for row in comparison %}<tr class="{% if row.modelo == 'regresion_logistica' %}selected{% endif %}"><td>{{ row.nombre }}</td><td>{{ "%.3f"|format(row.precision) }}</td><td>{{ "%.3f"|format(row.recall) }}</td><td>{{ "%.3f"|format(row.f1) }}</td><td>{{ "%.3f"|format(row.pr_auc) }}</td><td>{{ "%.3f"|format(row.roc_auc) }}</td><td>{{ "%.2f"|format(row.precision_at_20) }}</td></tr>{% endfor %}
+      </tbody></table></div>
+      <p class="note">La persistencia obtuvo el F1 más alto; la regresión logística obtuvo mejor PR-AUC, ROC-AUC y Precision@20.</p>
+    </section>
+
+    <section class="section">
+      <p class="section-kicker">Diagnóstico</p><h2>Gráficos de evaluación</h2>
+      <div class="plots">
+        <figure><img src="{{ url_for('artifact', name='confusion_matrix.png') }}" alt="Matriz de confusión"><figcaption>Matriz de confusión</figcaption></figure>
+        <figure><img src="{{ url_for('artifact', name='precision_recall_curve.png') }}" alt="Curva precisión-recall"><figcaption>Curva precisión-recall</figcaption></figure>
+        <figure><img src="{{ url_for('artifact', name='roc_curve.png') }}" alt="Curva ROC"><figcaption>Curva ROC</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="section split">
+      <div><p class="section-kicker">Explicabilidad</p><h2>Coeficientes principales</h2><p>Valores positivos aumentan la probabilidad estimada; valores negativos la reducen. No implican causalidad.</p></div>
+      <div class="coefficient-list">
+      {% for row in coefficients %}<div class="coefficient"><span title="{{ row.variable }}">{{ row.variable|replace('categorical__','')|replace('numeric__','') }}</span><b class="{{ 'up' if row.coeficiente > 0 else 'down' }}">{{ "%+.3f"|format(row.coeficiente) }}</b></div>{% endfor %}
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><div><p class="section-kicker">Priorización</p><h2>Predicciones con mayor probabilidad</h2></div><div class="summary"><b>{{ total_predictions }}</b> filas de prueba · <b>{{ positive_predictions }}</b> alertas · <b>{{ actual_increments }}</b> incrementos reales</div></div>
+      <div class="filters"><input id="search" type="search" placeholder="Buscar provincia o tipo de reporte"><select id="priority"><option value="">Todas las prioridades</option><option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja</option></select></div>
+      <div class="table-wrap predictions"><table id="prediction-table"><thead><tr><th>Semana</th><th>Provincia</th><th>Tipo de reporte</th><th>Probabilidad</th><th>Prioridad</th><th>Real</th></tr></thead><tbody>
+      {% for row in predictions %}<tr data-priority="{{ row.prioridad }}"><td>{{ row.report_week_start }}</td><td>{{ row.provincia_name }}</td><td>{{ row.report_type_name }}</td><td><b>{{ "%.1f%%"|format(row.probabilidad_incremento * 100) }}</b></td><td><span class="badge {{ row.prioridad }}">{{ row.prioridad }}</span></td><td>{{ 'Incremento' if row.valor_real == 1 else 'No incremento' }}</td></tr>{% endfor %}
+      </tbody></table></div>
+      <p class="note">Se muestran las 200 probabilidades más altas. El CSV completo permanece en <code>outputs/predictions_test.csv</code>.</p>
+    </section>
+    {% endif %}
+  </main>
+  <footer>Proyecto académico · Resultados locales de solo lectura</footer>
+  <script>
+    const search = document.getElementById('search'); const priority = document.getElementById('priority');
+    function filterRows(){ if(!search) return; const q=search.value.toLowerCase(); document.querySelectorAll('#prediction-table tbody tr').forEach(row=>{row.hidden=!(row.textContent.toLowerCase().includes(q)&&(!priority.value||row.dataset.priority===priority.value));}); }
+    search?.addEventListener('input',filterRows); priority?.addEventListener('change',filterRows);
+  </script>
+</body>
+</html>
+
