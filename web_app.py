@@ -59,11 +59,45 @@ def load_dashboard():
         "clase_mayoritaria": "Clase mayoritaria",
         "regla_persistencia": "Regla de persistencia",
         "regresion_logistica": "Regresión logística",
+        "arbol_decision": "Árbol de decisión",
+        "random_forest": "Random Forest",
+        "svm_lineal": "SVM lineal",
     }
-    comparison_display["nombre"] = comparison_display["modelo"].map(labels)
+    comparison_display["nombre"] = comparison_display["modelo"].map(labels).fillna(comparison_display["modelo"])
     metric_columns = ["precision", "recall", "f1", "pr_auc", "roc_auc", "precision_at_20"]
     for column in metric_columns:
         comparison_display[column] = comparison_display[column].astype(float)
+    algorithmic = comparison_display[comparison_display["modelo"].isin({
+        "regresion_logistica", "arbol_decision", "random_forest", "svm_lineal"
+    })]
+    best = algorithmic.loc[algorithmic["f1"].idxmax()]
+    model_explanations = {
+        "regresion_logistica": {
+            "familia": "Lineal probabilística",
+            "descripcion": "Combina las variables mediante coeficientes y devuelve una probabilidad interpretable de incremento.",
+            "umbral": "La probabilidad estimada se convierte en alerta cuando alcanza o supera este valor.",
+        },
+        "arbol_decision": {
+            "familia": "Árboles y reglas",
+            "descripcion": "Aprende decisiones no lineales del tipo «si una variable supera cierto valor, seguir esta rama».",
+            "umbral": "La proporción de la clase positiva en la hoja final se compara con este valor.",
+        },
+        "random_forest": {
+            "familia": "Ensamblado / bagging",
+            "descripcion": "Combina 500 árboles y promedia sus resultados para reducir la inestabilidad de un árbol individual.",
+            "umbral": "El promedio de las estimaciones de los árboles se convierte en alerta al superar este valor.",
+        },
+        "svm_lineal": {
+            "familia": "Margen máximo",
+            "descripcion": "Busca el hiperplano que separa ambas clases con el mayor margen posible.",
+            "umbral": "La distancia al hiperplano se transforma a escala 0–1 para ordenar y decidir; no es una probabilidad calibrada.",
+        },
+    }
+    model_details = []
+    for record in algorithmic.to_dict("records"):
+        record.update(model_explanations[record["modelo"]])
+        record["es_mejor"] = record["modelo"] == best["modelo"]
+        model_details.append(record)
 
     coefficients = coefficients.head(15).copy()
     coefficients["sentido"] = coefficients["coeficiente"].apply(
@@ -93,6 +127,9 @@ def load_dashboard():
         "positive_predictions": int(predictions["prediccion"].sum()),
         "actual_increments": int(predictions["valor_real"].sum()),
         "last_week": predictions["report_week_start"].max(),
+        "best_model": best["nombre"],
+        "best_f1": float(best["f1"]),
+        "model_details": model_details,
     }
 
 
@@ -121,6 +158,14 @@ def index():
         return render_template("model_dashboard.html", **load_dashboard())
     except FileNotFoundError as exc:
         return render_template("model_dashboard.html", load_error=f"Falta el archivo: {exc}"), 503
+
+
+@app.get("/metodologia")
+def metodologia():
+    try:
+        return render_template("metodologia.html", **load_dashboard())
+    except FileNotFoundError as exc:
+        return render_template("metodologia.html", load_error=f"Falta el archivo: {exc}"), 503
 
 
 @app.get("/artifact/<name>")

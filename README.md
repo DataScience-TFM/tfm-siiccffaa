@@ -2,7 +2,7 @@
 
 ## 1. Descripción
 
-Este proyecto entrena y evalúa un modelo de clasificación binaria para estimar si la actividad operacional de una combinación de provincia y tipo de reporte aumentará en el siguiente periodo semanal.
+Este proyecto entrena y compara cuatro técnicas de clasificación binaria para estimar si la actividad operacional de una combinación de provincia y tipo de reporte aumentará en el siguiente periodo semanal. La regresión logística permanece como modelo operativo por su interpretabilidad y Random Forest obtiene actualmente el mejor F1 experimental.
 
 El flujo incluye:
 
@@ -17,10 +17,26 @@ El flujo incluye:
 ## 2. Modelos evaluados
 
 - **Clase mayoritaria:** referencia mínima que predice siempre la clase más frecuente.
-- **Regla de persistencia:** compara el rezago de una semana con la media histórica previa.
+- **Regla de persistencia:** compara la actividad de la semana actual con la media histórica previa.
 - **Regresión logística balanceada:** modelo principal, seleccionado por su rapidez, interpretabilidad y capacidad para producir probabilidades.
+- **Árbol de decisión:** técnica no lineal basada en reglas, regularizada para reducir el sobreajuste.
+- **Random Forest:** ensamblado de 500 árboles mediante bagging y selección aleatoria de variables.
+- **SVM lineal:** clasificador de margen máximo adecuado para el volumen y dimensionalidad del conjunto.
+
+Las cuatro técnicas algorítmicas principales pertenecen a las familias lineal probabilística, árboles, ensamblados y margen máximo. Los dos primeros enfoques son baselines de control y no cuentan como técnicas principales.
 
 La métrica principal es F1 de la clase incremento. También se calculan precisión, recall, PR-AUC, ROC-AUC, matriz de confusión y Precision@20.
+
+### Resultados del último entrenamiento
+
+| Técnica | Umbral | Precisión | Recall | F1 | PR-AUC | ROC-AUC | Precision@20 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Regresión logística | 0,59 | 0,368 | 0,410 | 0,388 | 0,341 | 0,649 | 0,55 |
+| Árbol de decisión | 0,62 | 0,369 | 0,500 | 0,425 | 0,366 | 0,659 | 0,55 |
+| **Random Forest** | **0,54** | **0,371** | **0,556** | **0,445** | **0,372** | **0,671** | **0,55** |
+| SVM lineal | 0,55 | 0,368 | 0,353 | 0,360 | 0,341 | 0,649 | 0,55 |
+
+Estos valores proceden del bloque temporal de prueba más reciente, que no participa en el entrenamiento ni en la selección de umbrales.
 
 ## 3. Requisitos
 
@@ -81,8 +97,8 @@ Este lanzador realiza automáticamente y en orden:
 2. Ejecución de `prepare_bigquery.py`.
 3. Creación o actualización de `dataset_maestro_modelado_continuo`.
 4. Auditoría de semanas consecutivas.
-5. Entrenamiento y evaluación de los modelos.
-6. Almacenamiento de la regresión logística.
+5. Entrenamiento y evaluación de los cuatro modelos.
+6. Almacenamiento de todos los modelos y de la regresión logística operativa.
 7. Generación de las señales del Diario Ejecutivo.
 8. Reinicio del servidor Flask.
 9. Apertura del Diario Ejecutivo en el navegador.
@@ -90,6 +106,7 @@ Este lanzador realiza automáticamente y en orden:
 Al terminar estarán disponibles:
 
 - Dashboard del modelo: `http://127.0.0.1:8001/`
+- Documentación metodológica: `http://127.0.0.1:8001/metodologia`
 - Diario Ejecutivo: `http://127.0.0.1:8001/diario`
 - Descarga PDF: `http://127.0.0.1:8001/diario/pdf`
 - API de resumen: `http://127.0.0.1:8001/api/summary`
@@ -112,7 +129,9 @@ La consulta completa las semanas ausentes con cero, recalcula rezagos y medias y
 .\run_model.ps1
 ```
 
-Este comando instala únicamente las dependencias que falten, consulta BigQuery, divide los datos cronológicamente, entrena los modelos y guarda las métricas.
+Este comando instala únicamente las dependencias que falten, consulta BigQuery, reserva el 15 % más reciente como prueba, ejecuta tres ventanas temporales expansivas, entrena los modelos y guarda las métricas.
+
+En cada ventana, el modelo se entrena exclusivamente con semanas anteriores. Las predicciones de validación se utilizan para escoger el umbral que maximiza F1 entre `0,20` y `0,80`. Después, cada técnica se reentrena con todo el periodo anterior a prueba y se evalúa una sola vez sobre el bloque final.
 
 ### 7.3 Abrir solo el dashboard
 
@@ -122,7 +141,22 @@ Este comando instala únicamente las dependencias que falten, consulta BigQuery,
 
 Dirección: `http://127.0.0.1:8001/`
 
-El dashboard muestra comparación de modelos, precisión, recall, F1, PR-AUC, ROC-AUC, Precision@20, matriz de confusión, curvas, coeficientes y predicciones del bloque de prueba.
+El dashboard muestra comparación general, una pestaña de resultados por técnica, explicación del umbral, glosario de métricas, matriz de confusión, curvas, coeficientes y predicciones del bloque de prueba.
+
+La página `http://127.0.0.1:8001/metodologia` documenta el diseño experimental paso a paso.
+
+### 7.3.1 Variables utilizadas
+
+- Actividad de la semana actual.
+- Rezagos de 1, 2 y 4 semanas.
+- Media y desviación de las cuatro semanas anteriores.
+- Cambio y ratio respecto a la media histórica.
+- Cambio respecto a la semana anterior.
+- Actividad reciente acumulada.
+- Provincia y tipo de reporte.
+- Mes y semana del año.
+
+Todas las variables están disponibles al cierre de la semana observada. La actividad de la semana siguiente y el objetivo están excluidos para evitar fuga de información.
 
 ### 7.4 Generar el Diario Ejecutivo
 
@@ -152,8 +186,12 @@ Los reportes del 25 al 30 de mayo pertenecen a la semana iniciada el lunes 25. E
 
 ### Carpeta `models`
 
-- `logistic_regression.joblib`: Pipeline entrenado.
-- `metadata.json`: variables, fechas, tamaños de bloques y umbral.
+- `logistic_regression.joblib`: copia del pipeline operativo de regresión logística.
+- `regresion_logistica.joblib`: regresión logística evaluada.
+- `arbol_decision.joblib`: árbol de decisión evaluado.
+- `random_forest.joblib`: Random Forest evaluado.
+- `svm_lineal.joblib`: SVM lineal evaluada.
+- `metadata.json`: variables, fechas, ventanas temporales, tamaños y umbrales.
 
 ### Carpeta `outputs`
 
@@ -174,13 +212,23 @@ Los reportes del 25 al 30 de mayo pertenecen a la semana iniciada el lunes 25. E
 - `generate_diario.py`: aplica el modelo al último periodo disponible.
 - `web_app.py`: aplicación Flask del dashboard y Diario Ejecutivo.
 - `src/config.py`: configuración, variables y detección de credenciales.
-- `src/data.py`: lectura desde BigQuery o CSV.
+- `src/data.py`: lectura desde BigQuery o CSV y creación de variables derivadas.
 - `src/validation.py`: validaciones de esquema, grano y continuidad.
-- `src/modeling.py`: baselines, regresión logística y división temporal.
+- `src/modeling.py`: preprocesamiento, cuatro modelos, baselines y validación temporal expansiva.
 - `src/evaluation.py`: métricas, umbral, coeficientes y gráficos.
 - `sql/01_dataset_semanal_continuo.sql`: cuadrícula temporal y Dataset Maestro.
 
-## 11. Errores frecuentes
+## 11. Pruebas automatizadas
+
+Para comprobar los cuatro pipelines y que ninguna ventana temporal utiliza datos futuros:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+El resultado esperado actualmente es `4 passed`.
+
+## 12. Errores frecuentes
 
 ### No se encuentra la credencial
 
@@ -214,7 +262,7 @@ La tabla limpia no contiene semanas nuevas. Se debe actualizar el origen y volve
 
 La cuenta se autenticó, pero no tiene permiso para consultar o crear alguna tabla. Deben revisarse los permisos del proyecto, dataset y ubicación `europe-southwest1`.
 
-## 12. Seguridad y uso responsable
+## 13. Seguridad y uso responsable
 
 Las probabilidades son señales analíticas para priorizar revisión humana. No representan certeza, causalidad ni una orden automática de actuación.
 

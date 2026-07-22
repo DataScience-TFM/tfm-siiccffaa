@@ -45,6 +45,8 @@ def main() -> None:
         raise RuntimeError("No existen observaciones para el último periodo.")
 
     model = joblib.load(model_path)
+    metadata_path = settings.model_dir / "metadata.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.is_file() else {}
     latest["probabilidad_incremento"] = model.predict_proba(latest[FEATURES])[:, 1]
     latest = latest.sort_values("probabilidad_incremento", ascending=False)
 
@@ -73,7 +75,7 @@ def main() -> None:
         "source_week": str(latest_date.date()),
         "prediction_week": str(prediction_date.date()),
         "model": "Regresión logística",
-        "threshold": 0.67,
+        "threshold": float(metadata.get("threshold", 0.5)),
         "total_evaluated": int(len(latest)),
         "high_priority": sum(r["prioridad"] == "Alta" for r in records),
         "medium_priority": sum(r["prioridad"] == "Media" for r in records),
@@ -93,4 +95,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

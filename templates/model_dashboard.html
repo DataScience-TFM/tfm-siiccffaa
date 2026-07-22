@@ -5,13 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Resultados del modelo SIICCFFAA</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='model_dashboard.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='portal_extras.css') }}">
 </head>
 <body>
   <header class="hero">
     <div class="hero-inner">
       <p class="eyebrow">TFM · SIICCFFAA</p>
       <h1>Resultados del modelo predictivo</h1>
-      <p class="subtitle">Regresión logística para priorizar incrementos de actividad operacional.</p>
+      <p class="subtitle">Comparación de cuatro familias algorítmicas para priorizar incrementos de actividad operacional.</p>
+      <nav class="portal-nav"><a class="active" href="/">Resultados</a><a href="/metodologia">Metodología paso a paso</a><a href="/diario">Diario Ejecutivo</a></nav>
       {% if not load_error %}
       <div class="status"><span></span> Resultados cargados · última semana {{ last_week }}</div>
       {% endif %}
@@ -29,8 +31,8 @@
         <p>El modelo ordena combinaciones de provincia y tipo de reporte según su probabilidad de incremento. Las señales son apoyo para revisión humana, no decisiones automáticas.</p>
       </div>
       <dl class="metadata">
-        <div><dt>Fin de entrenamiento</dt><dd>{{ metadata.train_end }}</dd></div>
-        <div><dt>Fin de validación</dt><dd>{{ metadata.validation_end }}</dd></div>
+        <div><dt>Periodo preprueba hasta</dt><dd>{{ metadata.train_end }}</dd></div>
+        <div><dt>Ventanas de validación</dt><dd>{{ metadata.validation_folds|length }} expansivas</dd></div>
         <div><dt>Filas de prueba</dt><dd>{{ "{:,}".format(metadata.rows.test) }}</dd></div>
         <div><dt>Umbral elegido</dt><dd>{{ "%.2f"|format(metrics.threshold) }}</dd></div>
       </dl>
@@ -50,7 +52,49 @@
       <div class="table-wrap"><table><thead><tr><th>Modelo</th><th>Precisión</th><th>Recall</th><th>F1</th><th>PR-AUC</th><th>ROC-AUC</th><th>Precision@20</th></tr></thead><tbody>
       {% for row in comparison %}<tr class="{% if row.modelo == 'regresion_logistica' %}selected{% endif %}"><td>{{ row.nombre }}</td><td>{{ "%.3f"|format(row.precision) }}</td><td>{{ "%.3f"|format(row.recall) }}</td><td>{{ "%.3f"|format(row.f1) }}</td><td>{{ "%.3f"|format(row.pr_auc) }}</td><td>{{ "%.3f"|format(row.roc_auc) }}</td><td>{{ "%.2f"|format(row.precision_at_20) }}</td></tr>{% endfor %}
       </tbody></table></div>
-      <p class="note">La persistencia obtuvo el F1 más alto; la regresión logística obtuvo mejor PR-AUC, ROC-AUC y Precision@20.</p>
+      <p class="note"><b>Mejor técnica algorítmica por F1 en prueba:</b> {{ best_model }} ({{ "%.3f"|format(best_f1) }}). La selección se actualiza automáticamente tras cada entrenamiento.</p>
+    </section>
+
+    <section class="section">
+      <p class="section-kicker">Detalle por técnica</p><h2>Resultados de cada modelo</h2>
+      <p>Selecciona una pestaña para consultar su funcionamiento, umbral y métricas del último entrenamiento.</p>
+      <div class="model-tabs" role="tablist" aria-label="Modelos predictivos">
+        {% for model in model_details %}<button id="tab-{{ model.modelo }}" role="tab" aria-controls="panel-{{ model.modelo }}" aria-selected="{{ 'true' if loop.first else 'false' }}" tabindex="{{ '0' if loop.first else '-1' }}" data-model-tab="{{ model.modelo }}">{{ model.nombre }}{% if model.es_mejor %}<span>Mejor F1</span>{% endif %}</button>{% endfor %}
+      </div>
+      {% for model in model_details %}
+      <article id="panel-{{ model.modelo }}" class="model-panel" role="tabpanel" aria-labelledby="tab-{{ model.modelo }}" {% if not loop.first %}hidden{% endif %}>
+        <div class="model-summary"><div><p class="family">{{ model.familia }}</p><h3>{{ model.nombre }}</h3><p>{{ model.descripcion }}</p></div><div class="threshold-box"><span>Umbral elegido</span><strong>{{ "%.2f"|format(model.threshold) }}</strong><p>{{ model.umbral }}</p></div></div>
+        <div class="model-metrics">
+          {% for label, key in [('Precisión','precision'),('Recall','recall'),('F1','f1'),('PR-AUC','pr_auc'),('ROC-AUC','roc_auc'),('Precision@20','precision_at_20')] %}
+          <div><span>{{ label }}</span><strong>{{ "%.3f"|format(model[key]) }}</strong></div>
+          {% endfor %}
+        </div>
+      </article>
+      {% endfor %}
+    </section>
+
+    <section class="section threshold-guide">
+      <p class="section-kicker">Decisión</p><h2>¿Qué es el umbral y cómo se escoge?</h2>
+      <div class="threshold-example"><div><span>Puntuación del modelo</span><strong>0,64</strong></div><b>≥</b><div><span>Umbral de ejemplo</span><strong>0,62</strong></div><b>→</b><div class="alert-result"><span>Resultado</span><strong>Alerta</strong></div></div>
+      <div class="explanation-grid">
+        <article><h3>Qué significa</h3><p>El modelo entrega una puntuación entre 0 y 1. El umbral es el punto de corte que transforma esa puntuación en una decisión binaria: por debajo se predice «no incremento» y, al alcanzarlo o superarlo, «incremento».</p></article>
+        <article><h3>Cómo se calcula aquí</h3><p>Se generan predicciones fuera de muestra en tres ventanas temporales expansivas. Sobre esas predicciones se prueban valores desde 0,20 hasta 0,80, en pasos de 0,01, y se elige el que obtiene el F1 más alto.</p></article>
+        <article><h3>Por qué no se usa siempre 0,50</h3><p>Las clases están desbalanceadas y el coste de omitir un incremento puede diferir del coste de una falsa alerta. Mover el umbral permite equilibrar precisión y recall según el objetivo.</p></article>
+        <article><h3>Cómo cambia el resultado</h3><p>Un umbral bajo genera más alertas: normalmente aumenta recall y reduce precisión. Un umbral alto produce menos alertas: normalmente aumenta precisión y reduce recall.</p></article>
+      </div>
+      <p class="method-warning"><b>Protección contra sobreajuste:</b> el umbral se elige con validación y después se congela. El conjunto de prueba se utiliza únicamente para informar el resultado final.</p>
+    </section>
+
+    <section class="section">
+      <p class="section-kicker">Glosario</p><h2>Qué significa cada métrica</h2>
+      <div class="metric-glossary">
+        <article><h3>Precisión</h3><p>De todas las alertas generadas, indica qué proporción fue realmente un incremento.</p><code>verdaderos positivos / todas las alertas</code><small>Alta precisión = pocas falsas alarmas.</small></article>
+        <article><h3>Recall o sensibilidad</h3><p>De todos los incrementos que ocurrieron, indica qué proporción consiguió detectar el modelo.</p><code>verdaderos positivos / incrementos reales</code><small>Alto recall = pocos incrementos omitidos.</small></article>
+        <article><h3>F1</h3><p>Media armónica de precisión y recall. Solo es alta cuando ambas métricas mantienen un buen equilibrio.</p><code>2 × precisión × recall / (precisión + recall)</code><small>Es el criterio principal usado para escoger el umbral.</small></article>
+        <article><h3>PR-AUC</h3><p>Resume la relación entre precisión y recall para todos los umbrales posibles. Es especialmente útil con clases desbalanceadas.</p><small>Cuanto más cerca de 1, mejor. No depende de un único umbral.</small></article>
+        <article><h3>ROC-AUC</h3><p>Mide la capacidad de ordenar un incremento real por encima de un caso sin incremento a través de todos los umbrales.</p><small>0,50 equivale aproximadamente al azar; 1,00 es separación perfecta.</small></article>
+        <article><h3>Precision@20</h3><p>Entre los 20 casos con mayor puntuación, indica qué proporción terminó siendo un incremento real.</p><small>Sirve para valorar una revisión operativa limitada a los 20 casos prioritarios.</small></article>
+      </div>
     </section>
 
     <section class="section">
@@ -84,7 +128,9 @@
     const search = document.getElementById('search'); const priority = document.getElementById('priority');
     function filterRows(){ if(!search) return; const q=search.value.toLowerCase(); document.querySelectorAll('#prediction-table tbody tr').forEach(row=>{row.hidden=!(row.textContent.toLowerCase().includes(q)&&(!priority.value||row.dataset.priority===priority.value));}); }
     search?.addEventListener('input',filterRows); priority?.addEventListener('change',filterRows);
+    const modelTabs = [...document.querySelectorAll('[data-model-tab]')];
+    function selectModelTab(tab){ modelTabs.forEach(item=>{ const selected=item===tab; item.setAttribute('aria-selected',selected); item.tabIndex=selected?0:-1; document.getElementById(`panel-${item.dataset.modelTab}`).hidden=!selected; }); }
+    modelTabs.forEach((tab,index)=>{ tab.addEventListener('click',()=>selectModelTab(tab)); tab.addEventListener('keydown',event=>{ if(!['ArrowLeft','ArrowRight'].includes(event.key)) return; event.preventDefault(); const direction=event.key==='ArrowRight'?1:-1; const next=modelTabs[(index+direction+modelTabs.length)%modelTabs.length]; selectModelTab(next); next.focus(); }); });
   </script>
 </body>
 </html>
-

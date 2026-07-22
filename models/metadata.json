@@ -2,6 +2,7 @@
   "modelo": "regresion_logistica",
   "target": "incremento_actividad_siguiente_periodo",
   "features": [
+    "reportes_semana",
     "reportes_lag_1w",
     "reportes_lag_2w",
     "reportes_lag_4w",
@@ -10,14 +11,52 @@
     "provincia_id",
     "report_type_id",
     "mes",
-    "semana_anio"
+    "semana_anio",
+    "cambio_vs_media_4w",
+    "ratio_vs_media_4w",
+    "cambio_vs_semana_anterior",
+    "actividad_reciente_total"
   ],
-  "train_end": "2024-12-09",
+  "train_end": "2025-08-25",
+  "initial_train_end": "2024-12-09",
   "validation_end": "2025-08-25",
-  "threshold": 0.6700000000000004,
+  "validation_strategy": "3 ventanas temporales expansivas dentro del periodo preprueba",
+  "validation_folds": [
+    {
+      "train_rows": 31646,
+      "validation_rows": 18288,
+      "train_end": "2023-10-30",
+      "validation_end": "2024-06-10"
+    },
+    {
+      "train_rows": 49934,
+      "validation_rows": 13163,
+      "train_end": "2024-06-10",
+      "validation_end": "2025-01-20"
+    },
+    {
+      "train_rows": 63097,
+      "validation_rows": 8057,
+      "train_end": "2025-01-20",
+      "validation_end": "2025-08-25"
+    }
+  ],
+  "threshold": 0.5900000000000003,
+  "modelos_evaluados": [
+    "regresion_logistica",
+    "arbol_decision",
+    "random_forest",
+    "svm_lineal"
+  ],
+  "umbrales_validacion": {
+    "regresion_logistica": 0.5900000000000003,
+    "arbol_decision": 0.6200000000000003,
+    "random_forest": 0.5400000000000003,
+    "svm_lineal": 0.5500000000000003
+  },
   "rows": {
-    "train": 61513,
-    "validation": 9641,
+    "train": 71154,
+    "validation": 39508,
     "test": 5807
   }
 }

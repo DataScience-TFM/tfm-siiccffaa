@@ -21,6 +21,7 @@ TARGET = "incremento_actividad_siguiente_periodo"
 DATE_COLUMN = "report_week_start"
 GROUP_COLUMNS = ["provincia_id", "report_type_id"]
 NUMERIC_FEATURES = [
+    "reportes_semana",
     "reportes_lag_1w",
     "reportes_lag_2w",
     "reportes_lag_4w",
@@ -28,7 +29,10 @@ NUMERIC_FEATURES = [
     "reportes_std_4w_previa",
 ]
 CATEGORICAL_FEATURES = ["provincia_id", "report_type_id"]
-DERIVED_FEATURES = ["mes", "semana_anio"]
+DERIVED_FEATURES = [
+    "mes", "semana_anio", "cambio_vs_media_4w", "ratio_vs_media_4w",
+    "cambio_vs_semana_anterior", "actividad_reciente_total",
+]
 FEATURES = NUMERIC_FEATURES + CATEGORICAL_FEATURES + DERIVED_FEATURES
 FORBIDDEN_FEATURES = ["reportes_siguiente_semana", TARGET]
 
